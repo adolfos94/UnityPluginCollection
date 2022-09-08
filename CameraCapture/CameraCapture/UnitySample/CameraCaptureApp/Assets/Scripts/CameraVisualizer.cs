@@ -88,6 +88,7 @@ public class CameraVisualizer : MonoBehaviour
             case alignTracker:
                 alignToCamera = true;
                 break;
+
             case resetTracker:
                 transform.position = defaultPosition;
                 alignToCamera = false;

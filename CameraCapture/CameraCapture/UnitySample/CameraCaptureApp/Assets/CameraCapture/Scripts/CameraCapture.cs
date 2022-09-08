@@ -3,13 +3,9 @@
 
 using SpatialTranformHelper;
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using UnityEngine;
-using UnityEngine.Windows.Speech;
 
 namespace CameraCapture
 {
@@ -22,22 +18,18 @@ namespace CameraCapture
         public SpatialCameraTracker CameraTracker = null;
 
         public Renderer VideoRenderer = null;
-        public Renderer PhotoRenderer = null;
-
         private Texture2D videoTexture = null;
-        private Texture2D photoTexture = null;
 
         private IntPtr spatialCoordinateSystemPtr = IntPtr.Zero;
 
-        TaskCompletionSource<Wrapper.CaptureState> startPreviewCompletionSource = null;
-        TaskCompletionSource<Wrapper.CaptureState> stopCompletionSource = null;
-        TaskCompletionSource<Wrapper.CaptureState> photoCompletionSource = null;
+        private TaskCompletionSource<Wrapper.CaptureState> startPreviewCompletionSource = null;
+        private TaskCompletionSource<Wrapper.CaptureState> stopCompletionSource = null;
 
-        private const string takePhoto = "take photo";
         private const string startPreview = "start preview";
         private const string stopPreveiw = "stop preview";
 
 #if UNITY_EDITOR
+
         private void OnGUI()
         {
             int y = 50;
@@ -51,13 +43,6 @@ namespace CameraCapture
             if (GUI.Button(new Rect(50, y, 200, 50), "Stop Preview"))
             {
                 StopPreview();
-            }
-
-            y += 55;
-
-            if (GUI.Button(new Rect(50, y, 200, 50), "Take Photo"))
-            {
-                TakePhoto();
             }
 
             y += 55;
@@ -79,6 +64,7 @@ namespace CameraCapture
                 CameraTracker.UpdateCameraMatrices(testMatrix.FromUnity(), testProj.FromUnity());
             }
         }
+
 #endif
 
         protected override void Awake()
@@ -113,18 +99,12 @@ namespace CameraCapture
             {
                 VideoRenderer.enabled = true;
             }
-
-            if (PhotoRenderer != null)
-            {
-                PhotoRenderer.enabled = true;
-            }
         }
 
         protected override void OnDisable()
         {
             startPreviewCompletionSource?.TrySetCanceled();
             stopCompletionSource?.TrySetCanceled();
-            photoCompletionSource?.TrySetCanceled();
 
             if (VideoRenderer != null)
             {
@@ -133,14 +113,6 @@ namespace CameraCapture
             }
 
             videoTexture = null;
-
-            if (PhotoRenderer != null)
-            {
-                PhotoRenderer.material.SetTexture("_MainTex", null);
-                PhotoRenderer.enabled = false;
-            }
-
-            photoTexture = null;
 
             StopPreview();
 
@@ -156,17 +128,13 @@ namespace CameraCapture
                     case Wrapper.CaptureStateType.PreviewStarted:
                         startPreviewCompletionSource?.TrySetResult(args.CaptureState);
                         break;
+
                     case Wrapper.CaptureStateType.PreviewStopped:
                         stopCompletionSource?.TrySetResult(args.CaptureState);
                         break;
-                    case Wrapper.CaptureStateType.PreviewAudioFrame:
-                        //Debug.Log("PreviewAudioFrame");
-                        break;
+
                     case Wrapper.CaptureStateType.PreviewVideoFrame:
                         OnPreviewFrameChanged(args.CaptureState);
-                        break;
-                    case Wrapper.CaptureStateType.PhotoFrame:
-                        photoCompletionSource?.TrySetResult(args.CaptureState);
                         break;
                 }
             }
@@ -179,8 +147,6 @@ namespace CameraCapture
             startPreviewCompletionSource?.TrySetCanceled();
 
             stopCompletionSource?.TrySetCanceled();
-
-            photoCompletionSource?.TrySetCanceled();
         }
 
         protected void OnPreviewFrameChanged(Wrapper.CaptureState state)
@@ -230,11 +196,7 @@ namespace CameraCapture
 
         public void PhraseRecognized(string keywords)
         {
-            if (keywords.ToLower().Contains(takePhoto))
-            {
-                TakePhoto();
-            }
-            else if (keywords.ToLower().Contains(startPreview))
+            if (keywords.ToLower().Contains(startPreview))
             {
                 SetSpatialCoordinateSystem();
 
@@ -272,11 +234,6 @@ namespace CameraCapture
             {
                 StopPreview();
             }
-        }
-
-        public async void TakePhoto()
-        {
-            await TakePhotoAsync(Width, Height, true, true);
         }
 
         public async Task<bool> StartPreviewAsync(int width, int height, bool enableAudio, bool useMrc)
@@ -341,117 +298,16 @@ namespace CameraCapture
             return CheckHR(hr) == 0;
         }
 
-        public async Task<Texture2D> TakePhotoAsync(int width, int height, bool useMrc, bool flipImage = false)
-        {
-            photoCompletionSource?.TrySetCanceled();
-
-            Texture2D copyTexture = null;
-
-            var hr = Native.TakePhoto(instanceId, (UInt32)width, (UInt32)height, useMrc);
-            if (hr == 0)
-            {
-                photoCompletionSource = new TaskCompletionSource<Wrapper.CaptureState>();
-
-                try
-                {
-                    var state = await photoCompletionSource.Task;
-
-                    if (state.width != width || state.height != height)
-                    {
-                        Debug.Log("Video texture does not match the size requested, using " + state.width + " x " + state.height);
-                    }
-
-                    if (photoTexture == null)
-                    {
-                        photoTexture = Texture2D.CreateExternalTexture(state.width, state.height, TextureFormat.BGRA32, false, false, state.imgTexture);
-                    }
-
-                    photoTexture.UpdateExternalTexture(state.imgTexture);
-
-                    copyTexture = CopyTexture(photoTexture, flipImage);
-
-                    if (PhotoRenderer != null)
-                    {
-                        PhotoRenderer.enabled = true;
-                        PhotoRenderer.sharedMaterial.SetTexture("_MainTex", photoTexture);
-                        PhotoRenderer.sharedMaterial.SetTextureScale("_MainTex", new Vector2(1, -1)); // flip texture
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError(ex.Message);
-                }
-            }
-            else
-            {
-                await Task.Yield();
-
-                CheckHR(hr);
-            }
-
-            return copyTexture;
-        }
-
-        private Texture2D CopyTexture(Texture2D sourceTexture, bool flipImage = false)
-        {
-            Texture2D texture2D = null;
-
-            if (sourceTexture != null)
-            {
-                var tempRenderTexture = RenderTexture.GetTemporary(
-                        sourceTexture.width,
-                        sourceTexture.height,
-                        0,
-                        RenderTextureFormat.BGRA32,
-                        RenderTextureReadWrite.Linear);
-
-                // Blit the pixels on texture to the RenderTexture
-                Graphics.Blit(sourceTexture, tempRenderTexture);
-
-                // Backup the currently set RenderTexture
-                RenderTexture previous = RenderTexture.active;
-
-                // Set the current RenderTexture to the temporary one we created
-                RenderTexture.active = tempRenderTexture;
-
-                // Create a new readable Texture2D to copy the pixels to it
-                texture2D = new Texture2D(sourceTexture.width, sourceTexture.height, TextureFormat.RGB24, false, true);
-                if (flipImage)
-                {
-                    for (int y = 0; y < sourceTexture.height; y++)
-                    {
-                        texture2D.ReadPixels(new Rect(0, y, tempRenderTexture.width, 1), 0, y);
-                    }
-                }
-                else
-                {
-                    texture2D.ReadPixels(new Rect(0, 0, tempRenderTexture.width, tempRenderTexture.height), 0, 0);
-                }
-                texture2D.Apply();
-
-                // Reset the active RenderTexture
-                RenderTexture.active = previous;
-
-                // Release the temporary RenderTexture
-                RenderTexture.ReleaseTemporary(tempRenderTexture);
-            }
-
-            return texture2D;
-        }
-
         private static class Native
         {
             [DllImport(Wrapper.ModuleName, CallingConvention = CallingConvention.StdCall, EntryPoint = "CaptureStartPreview")]
-            internal static extern Int32 StartPreview(Int32 handle, UInt32 width, UInt32 height, [MarshalAs(UnmanagedType.I1)]Boolean enableAudio, [MarshalAs(UnmanagedType.I1)]Boolean enableMrc);
+            internal static extern Int32 StartPreview(Int32 handle, UInt32 width, UInt32 height, [MarshalAs(UnmanagedType.I1)] Boolean enableAudio, [MarshalAs(UnmanagedType.I1)] Boolean enableMrc);
 
             [DllImport(Wrapper.ModuleName, CallingConvention = CallingConvention.StdCall, EntryPoint = "CaptureStopPreview")]
             internal static extern Int32 StopPreview(Int32 handle);
 
             [DllImport(Wrapper.ModuleName, CallingConvention = CallingConvention.StdCall, EntryPoint = "CaptureSetCoordinateSystem")]
             internal static extern Int32 SetCoordinateSystem(Int32 instanceId, IntPtr spatialCoordinateSystemPtr);
-
-            [DllImport(Wrapper.ModuleName, CallingConvention = CallingConvention.StdCall, EntryPoint = "CaptureTakePhoto")]
-            internal static extern Int32 TakePhoto(Int32 instanceId, UInt32 width, UInt32 height, [MarshalAs(UnmanagedType.I1)]Boolean enableMrc);
         }
     }
 }
