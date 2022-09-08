@@ -602,7 +602,7 @@ PlayerSettings:
   metroCertificatePassword: 
   metroCertificateSubject: DefaultCompany
   metroCertificateIssuer: DefaultCompany
-  metroCertificateNotAfter: 0028a8110658d701
+  metroCertificateNotAfter: 0020ee70cce2d901
   metroApplicationDescription: CameraCaptureApp
   wsaImages: {}
   metroTileShortName: 

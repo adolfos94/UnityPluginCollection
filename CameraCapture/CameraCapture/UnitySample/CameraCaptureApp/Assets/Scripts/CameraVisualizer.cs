@@ -13,7 +13,7 @@ public class CameraVisualizer : MonoBehaviour
     private Vector3 startPosition;
 
     private Vector3 defaultPosition;
-    private bool alignToCamera = false;
+    private bool alignToCamera = true;
 
     private const string alignTracker = "align tracker";
     private const string resetTracker = "reset tracker";

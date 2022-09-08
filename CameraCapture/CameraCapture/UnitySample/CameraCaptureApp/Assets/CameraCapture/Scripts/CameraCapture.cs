@@ -15,6 +15,7 @@ namespace CameraCapture
         public Int32 Height = 720;
         public Boolean EnableAudio = false;
         public Boolean EnableMrc = false;
+        public Boolean EnabledPreview = false;
         public SpatialCameraTracker CameraTracker = null;
 
         public Renderer VideoRenderer = null;
@@ -51,21 +52,23 @@ namespace CameraCapture
             {
                 UnityEngine.Matrix4x4 testMatrix = UnityEngine.Matrix4x4.TRS(Vector3.forward + Vector3.up * .25f, new Quaternion(0.3826834f, 0.0f, 0.0f, 0.9238796f), Vector3.one);
                 UnityEngine.Matrix4x4 testProj = UnityEngine.Matrix4x4.Perspective(64.69f, 1.78f, 0.1f, 1.0f);
-                CameraTracker.UpdateCameraMatrices(testMatrix.FromUnity(), testProj.FromUnity());
-            }
 
-            if (GUI.Button(new Rect(250, y, 200, 50), "Test Random Transform"))
-            {
-                var position = Vector3.forward * UnityEngine.Random.Range(-2.0f, 2.0f) + Vector3.up * .25f;
-                var angle = Quaternion.AngleAxis(UnityEngine.Random.Range(-90.0f, 90.0f), Vector3.right);
-
-                UnityEngine.Matrix4x4 testMatrix = UnityEngine.Matrix4x4.TRS(position, angle, Vector3.one);
-                UnityEngine.Matrix4x4 testProj = UnityEngine.Matrix4x4.Perspective(64.69f, 1.78f, 0.1f, 1.0f);
                 CameraTracker.UpdateCameraMatrices(testMatrix.FromUnity(), testProj.FromUnity());
             }
         }
 
 #endif
+
+        public void OnPreviewButton()
+        {
+            if (EnabledPreview == false)
+            {
+                SetSpatialCoordinateSystem();
+                StartPreview();
+            }
+            else
+                StopPreview();
+        }
 
         protected override void Awake()
         {
@@ -194,20 +197,6 @@ namespace CameraCapture
             }
         }
 
-        public void PhraseRecognized(string keywords)
-        {
-            if (keywords.ToLower().Contains(startPreview))
-            {
-                SetSpatialCoordinateSystem();
-
-                StartPreview();
-            }
-            else if (keywords.ToLower().Contains(stopPreveiw))
-            {
-                StopPreview();
-            }
-        }
-
         private void SetSpatialCoordinateSystem()
         {
             spatialCoordinateSystemPtr = UnityEngine.XR.WSA.WorldManager.GetNativeISpatialCoordinateSystemPtr();
@@ -243,6 +232,7 @@ namespace CameraCapture
             var hr = Native.StartPreview(instanceId, (UInt32)width, (UInt32)height, enableAudio, useMrc);
             if (hr == 0)
             {
+                EnabledPreview = true;
                 startPreviewCompletionSource = new TaskCompletionSource<Wrapper.CaptureState>();
 
                 try
@@ -273,6 +263,7 @@ namespace CameraCapture
             var hr = Native.StopPreview(instanceId);
             if (hr == 0)
             {
+                EnabledPreview = false;
                 stopCompletionSource = new TaskCompletionSource<Wrapper.CaptureState>();
 
                 try
