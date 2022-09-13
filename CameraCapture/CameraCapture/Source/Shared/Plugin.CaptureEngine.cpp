@@ -431,10 +431,8 @@ void CaptureEngine::PayloadHandler(CameraCapture::Media::PayloadHandler const& v
 					bufferChanged = true;
 				}
 
-				if (bufferChanged)
-				{
-					Callback(state);
-				}
+				// Send the callback every frame
+				Callback(state);
 			}
 		});
 }
